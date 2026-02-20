@@ -1,10 +1,11 @@
-import { getChannelDock } from "../../channels/dock.js";
-import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { GroupKeyResolution, SessionEntry } from "../../config/sessions.js";
+import type { TemplateContext } from "../templating.js";
+import { getChannelDock } from "../../channels/dock.js";
+import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { sanitizeGroupName, sanitizeParticipantList } from "../../security/channel-sanitize.js";
 import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import { normalizeGroupActivation } from "../group-activation.js";
-import type { TemplateContext } from "../templating.js";
 
 function extractGroupId(raw: string | undefined | null): string | undefined {
   const trimmed = (raw ?? "").trim();
@@ -85,8 +86,11 @@ function resolveProviderLabel(rawProvider: string | undefined): string {
  * directly instead of using the message tool.
  */
 export function buildGroupChatContext(params: { sessionCtx: TemplateContext }): string {
-  const subject = params.sessionCtx.GroupSubject?.trim();
-  const members = params.sessionCtx.GroupMembers?.trim();
+  // SECURITY: Sanitize user-controlled channel metadata to prevent prompt injection.
+  const rawSubject = params.sessionCtx.GroupSubject?.trim();
+  const rawMembers = params.sessionCtx.GroupMembers?.trim();
+  const subject = rawSubject ? sanitizeGroupName(rawSubject).value || undefined : undefined;
+  const members = rawMembers ? sanitizeParticipantList(rawMembers).value || undefined : undefined;
   const providerLabel = resolveProviderLabel(params.sessionCtx.Provider);
 
   const lines: string[] = [];

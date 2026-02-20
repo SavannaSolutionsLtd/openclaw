@@ -1,6 +1,11 @@
+import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import type {
+  ExecElevatedDefaults,
+  ExecToolDefaults,
+  ExecToolDetails,
+} from "./bash-tools.exec-types.js";
 import { type ExecHost, maxAsk, minSecurity, resolveSafeBins } from "../infra/exec-approvals.js";
 import { getTrustedSafeBinDirs } from "../infra/exec-safe-bin-trust.js";
 import {
@@ -9,6 +14,7 @@ import {
 } from "../infra/shell-env.js";
 import { logInfo } from "../logger.js";
 import { parseAgentSessionKey, resolveAgentIdFromSessionKey } from "../routing/session-key.js";
+import { buildSafeProcessEnv } from "../security/safe-env.js";
 import { markBackgrounded } from "./bash-process-registry.js";
 import { processGatewayAllowlist } from "./bash-tools.exec-host-gateway.js";
 import { executeNodeHostCommand } from "./bash-tools.exec-host-node.js";
@@ -28,15 +34,9 @@ import {
   execSchema,
   validateHostEnv,
 } from "./bash-tools.exec-runtime.js";
-import type {
-  ExecElevatedDefaults,
-  ExecToolDefaults,
-  ExecToolDetails,
-} from "./bash-tools.exec-types.js";
 import {
   buildSandboxEnv,
   clampWithDefault,
-  coerceEnv,
   readEnvInt,
   resolveSandboxWorkdir,
   resolveWorkdir,
@@ -322,7 +322,9 @@ export function createExecTool(
         workdir = resolveWorkdir(rawWorkdir, warnings);
       }
 
-      const baseEnv = coerceEnv(process.env);
+      // SECURITY: Use allowlisted env vars instead of full process.env to prevent
+      // leaking API keys, tokens, and credentials to AI-spawned child processes.
+      const baseEnv = buildSafeProcessEnv(process.env);
 
       // Logic: Sandbox gets raw env. Host (gateway/node) must pass validation.
       // We validate BEFORE merging to prevent any dangerous vars from entering the stream.

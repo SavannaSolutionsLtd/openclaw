@@ -1,3 +1,4 @@
+import type { SignalEventHandlerDeps, SignalReceivePayload } from "./event-handler.types.js";
 import { resolveHumanDelayConfig } from "../../agents/identity.js";
 import { hasControlCommand } from "../../auto-reply/command-detection.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
@@ -36,6 +37,7 @@ import {
   upsertChannelPairingRequest,
 } from "../../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../../routing/resolve-route.js";
+import { sanitizeGroupName } from "../../security/channel-sanitize.js";
 import { normalizeE164 } from "../../utils.js";
 import {
   formatSignalPairingIdLine,
@@ -47,7 +49,6 @@ import {
   resolveSignalSender,
 } from "../identity.js";
 import { sendMessageSignal, sendReadReceiptSignal, sendTypingSignal } from "../send.js";
-import type { SignalEventHandlerDeps, SignalReceivePayload } from "./event-handler.types.js";
 import { renderSignalMentions } from "./mentions.js";
 export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
   const inboundDebounceMs = resolveInboundDebounceMs({ cfg: deps.cfg, channel: "signal" });
@@ -153,7 +154,10 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       AccountId: route.accountId,
       ChatType: entry.isGroup ? "group" : "direct",
       ConversationLabel: fromLabel,
-      GroupSubject: entry.isGroup ? (entry.groupName ?? undefined) : undefined,
+      // SECURITY: Sanitize group metadata to prevent prompt injection via channel names
+      GroupSubject: entry.isGroup
+        ? sanitizeGroupName(entry.groupName).value || undefined
+        : undefined,
       SenderName: entry.senderName,
       SenderId: entry.senderDisplay,
       Provider: "signal" as const,

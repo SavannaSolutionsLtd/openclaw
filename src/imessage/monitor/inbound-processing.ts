@@ -1,3 +1,5 @@
+import type { OpenClawConfig } from "../../config/config.js";
+import type { MonitorIMessageOpts, IMessagePayload } from "./types.js";
 import { hasControlCommand } from "../../auto-reply/command-detection.js";
 import {
   formatInboundEnvelope,
@@ -14,19 +16,18 @@ import { finalizeInboundContext } from "../../auto-reply/reply/inbound-context.j
 import { buildMentionRegexes, matchesMentionPatterns } from "../../auto-reply/reply/mentions.js";
 import { resolveControlCommandGate } from "../../channels/command-gating.js";
 import { logInboundDrop } from "../../channels/logging.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveChannelGroupPolicy,
   resolveChannelGroupRequireMention,
 } from "../../config/group-policy.js";
 import { resolveAgentRoute } from "../../routing/resolve-route.js";
+import { sanitizeGroupName, sanitizeParticipantList } from "../../security/channel-sanitize.js";
 import { truncateUtf16Safe } from "../../utils.js";
 import {
   formatIMessageChatTarget,
   isAllowedIMessageSender,
   normalizeIMessageHandle,
 } from "../targets.js";
-import type { MonitorIMessageOpts, IMessagePayload } from "./types.js";
 
 type IMessageReplyContext = {
   id?: string;
@@ -437,9 +438,13 @@ export function buildIMessageInboundContext(params: {
     AccountId: decision.route.accountId,
     ChatType: decision.isGroup ? "group" : "direct",
     ConversationLabel: fromLabel,
-    GroupSubject: decision.isGroup ? (params.message.chat_name ?? undefined) : undefined,
+    // SECURITY: Sanitize group metadata to prevent prompt injection via channel names/participants
+    GroupSubject: decision.isGroup
+      ? sanitizeGroupName(params.message.chat_name).value || undefined
+      : undefined,
     GroupMembers: decision.isGroup
-      ? (params.message.participants ?? []).filter(Boolean).join(", ")
+      ? sanitizeParticipantList((params.message.participants ?? []).filter(Boolean)).value ||
+        undefined
       : undefined,
     SenderName: decision.senderNormalized,
     SenderId: decision.sender,
