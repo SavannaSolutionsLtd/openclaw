@@ -5,7 +5,9 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: stale-${{ github.repository }}
@@ -13,36 +15,12 @@ concurrency:
 
 jobs:
   stale:
-    # Only run in the main repository where the GitHub App is configured
-    if: github.repository == 'SavannaSolutionsLtd/openclaw'
-    permissions:
-      issues: write
-      pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - name: Create GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        continue-on-error: true
-        with:
-          app-id: "2729701"
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-
-      - name: Check token availability
-        id: check-token
-        run: |
-          if [ -n "${{ steps.app-token.outputs.token }}" ]; then
-            echo "has_token=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_token=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::GitHub App token not available. Stale workflow skipped."
-          fi
-
       - name: Mark stale issues and pull requests
-        if: steps.check-token.outputs.has_token == 'true'
         uses: actions/stale@v9
         with:
-          repo-token: ${{ steps.app-token.outputs.token }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
           days-before-issue-stale: 7
           days-before-issue-close: 5
           days-before-pr-stale: 5
